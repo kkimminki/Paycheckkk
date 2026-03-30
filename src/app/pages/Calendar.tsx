@@ -1,51 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, Edit2, Trash2 } from "lucide-react";
 import { WorkRecord } from "../utils/payCalculator";
-
-// Mock 데이터
-const mockWorkRecords: WorkRecord[] = [
-  {
-    id: "1",
-    date: "2026-03-15",
-    startTime: "09:00",
-    endTime: "18:00",
-    hourlyWage: 10000,
-    isNightShift: false,
-    isOvertime: false,
-  },
-  {
-    id: "2",
-    date: "2026-03-17",
-    startTime: "10:00",
-    endTime: "19:00",
-    hourlyWage: 10000,
-    isNightShift: false,
-    isOvertime: false,
-  },
-  {
-    id: "3",
-    date: "2026-03-20",
-    startTime: "14:00",
-    endTime: "22:00",
-    hourlyWage: 10000,
-    isNightShift: false,
-    isOvertime: false,
-  },
-  {
-    id: "4",
-    date: "2026-03-22",
-    startTime: "18:00",
-    endTime: "01:00",
-    hourlyWage: 10000,
-    isNightShift: true,
-    isOvertime: false,
-  },
-];
+import { saveWorkLog, getWorkLogs } from "../utils/api";
+import { toast } from "sonner";
 
 export function Calendar() {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 2, 29)); // 2026년 3월
-  const [workRecords] = useState<WorkRecord[]>(mockWorkRecords);
+  const [currentDate, setCurrentDate] = useState(new Date(2026, 2, 30)); // 2026년 3월 30일
+  const [workRecords, setWorkRecords] = useState<WorkRecord[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     date: "",
     startTime: "",
@@ -57,6 +20,26 @@ export function Calendar() {
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+
+  // 근무 기록 불러오기
+  useEffect(() => {
+    loadWorkLogs();
+  }, [year, month]);
+
+  const loadWorkLogs = async () => {
+    try {
+      setLoading(true);
+      const response = await getWorkLogs(year, month + 1);
+      if (response.success) {
+        setWorkRecords(response.workLogs);
+      }
+    } catch (error) {
+      console.error('Failed to load work logs:', error);
+      toast.error('근무 기록을 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 달력 날짜 생성
   const firstDay = new Date(year, month, 1).getDay();
@@ -87,20 +70,65 @@ export function Calendar() {
     return workRecords.find(record => record.date === dateStr);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // 실제로는 여기서 데이터를 저장
-    console.log("Saving work record:", formData);
-    setShowAddForm(false);
-    setFormData({
-      date: "",
-      startTime: "",
-      endTime: "",
-      hourlyWage: 10000,
-      isNightShift: false,
-      isOvertime: false,
-    });
+    
+    try {
+      setLoading(true);
+      const response = await saveWorkLog({
+        date: formData.date,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        hourlyWage: formData.hourlyWage,
+        isNightShift: formData.isNightShift,
+        isOvertime: formData.isOvertime,
+      });
+
+      if (response.success) {
+        toast.success('근무 기록이 저장되었습니다!');
+        setShowAddForm(false);
+        setFormData({
+          date: "",
+          startTime: "",
+          endTime: "",
+          hourlyWage: 10000,
+          isNightShift: false,
+          isOvertime: false,
+        });
+        // 근무 기록 새로고침
+        loadWorkLogs();
+      }
+    } catch (error) {
+      console.error('Failed to save work log:', error);
+      toast.error('근무 기록 저장에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // 총 근무시간 계산
+  const calculateTotalHours = () => {
+    return workRecords.reduce((total, record) => {
+      const [startHour, startMin] = record.startTime.split(':').map(Number);
+      const [endHour, endMin] = record.endTime.split(':').map(Number);
+      let hours = endHour - startHour;
+      let minutes = endMin - startMin;
+      if (minutes < 0) {
+        hours -= 1;
+        minutes += 60;
+      }
+      if (hours < 0) hours += 24;
+      return total + hours + minutes / 60;
+    }, 0);
+  };
+
+  const totalHours = calculateTotalHours();
+  const avgWeeklyHours = totalHours / 4;
+  const avgHourlyWage = workRecords.length > 0 
+    ? workRecords.reduce((sum, r) => sum + r.hourlyWage, 0) / workRecords.length 
+    : 10000;
+  const estimatedBasicPay = totalHours * avgHourlyWage;
+  const estimatedWeeklyHolidayPay = avgWeeklyHours >= 15 ? (avgWeeklyHours / 5) * avgHourlyWage * 4 : 0;
 
   return (
     <div className="space-y-6">
@@ -155,7 +183,7 @@ export function Calendar() {
           {calendarDays.map((day, index) => {
             const workRecord = getWorkRecordForDay(day);
             const isToday =
-              day === 29 && month === 2 && year === 2026;
+              day === 30 && month === 2 && year === 2026;
 
             return (
               <div
@@ -313,18 +341,20 @@ export function Calendar() {
             <div className="text-sm text-gray-600">총 근무일</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">32시간</div>
+            <div className="text-2xl font-bold text-green-600">
+              {totalHours.toFixed(2)}시간
+            </div>
             <div className="text-sm text-gray-600">총 근무시간</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-purple-600">
-              ₩320,000
+              ₩{estimatedBasicPay.toLocaleString()}
             </div>
             <div className="text-sm text-gray-600">예상 기본급</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-600">
-              ₩40,000
+              ₩{estimatedWeeklyHolidayPay.toLocaleString()}
             </div>
             <div className="text-sm text-gray-600">예상 주휴수당</div>
           </div>

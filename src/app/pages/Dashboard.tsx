@@ -1,31 +1,97 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { StatCard } from "../components/StatCard";
 import { Wallet, Clock, TrendingUp, Target } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-// Mock 데이터
-const monthlyData = [
-  { month: "1월", income: 850000 },
-  { month: "2월", income: 920000 },
-  { month: "3월", income: 1050000 },
-  { month: "4월", income: 980000 },
-  { month: "5월", income: 1120000 },
-  { month: "6월", income: 1200000 },
-];
-
-const weeklyHours = [
-  { week: "1주", hours: 20 },
-  { week: "2주", hours: 24 },
-  { week: "3주", hours: 18 },
-  { week: "4주", hours: 22 },
-];
+import { getWorkLogs } from "../utils/api";
 
 export function Dashboard() {
-  const [currentMonth] = useState("6월");
-  const [monthlyIncome] = useState(1200000);
-  const [totalHours] = useState(84);
-  const [yearlyIncome] = useState(6120000);
-  const [savingsGoal] = useState(10000000);
+  const [workLogs, setWorkLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  const currentDate = new Date(2026, 2, 30); // 2026년 3월 30일
+  const currentMonth = currentDate.getMonth() + 1;
+  const currentYear = currentDate.getFullYear();
+
+  // 근무 기록 불러오기
+  useEffect(() => {
+    loadAllWorkLogs();
+  }, []);
+
+  const loadAllWorkLogs = async () => {
+    try {
+      setLoading(true);
+      const response = await getWorkLogs();
+      if (response.success) {
+        setWorkLogs(response.workLogs);
+      }
+    } catch (error) {
+      console.error('Failed to load work logs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 이번 달 데이터 계산
+  const currentMonthLogs = workLogs.filter(log => {
+    const logDate = new Date(log.date);
+    return logDate.getFullYear() === currentYear && logDate.getMonth() + 1 === currentMonth;
+  });
+
+  const calculateHours = (startTime: string, endTime: string) => {
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    let hours = endHour - startHour;
+    let minutes = endMin - startMin;
+    if (minutes < 0) {
+      hours -= 1;
+      minutes += 60;
+    }
+    if (hours < 0) hours += 24;
+    return hours + minutes / 60;
+  };
+
+  const totalHours = currentMonthLogs.reduce((sum, log) => sum + calculateHours(log.startTime, log.endTime), 0);
+  const avgHourlyWage = currentMonthLogs.length > 0 
+    ? currentMonthLogs.reduce((sum, log) => sum + log.hourlyWage, 0) / currentMonthLogs.length 
+    : 10000;
+  const monthlyIncome = Math.floor(totalHours * avgHourlyWage);
+
+  // 월별 수입 데이터 생성
+  const monthlyData = [];
+  for (let m = 1; m <= 6; m++) {
+    const monthLogs = workLogs.filter(log => {
+      const logDate = new Date(log.date);
+      return logDate.getFullYear() === currentYear && logDate.getMonth() + 1 === m;
+    });
+    const monthHours = monthLogs.reduce((sum, log) => sum + calculateHours(log.startTime, log.endTime), 0);
+    const monthWage = monthLogs.length > 0 
+      ? monthLogs.reduce((sum, log) => sum + log.hourlyWage, 0) / monthLogs.length 
+      : avgHourlyWage;
+    monthlyData.push({
+      month: `${m}월`,
+      income: Math.floor(monthHours * monthWage),
+    });
+  }
+
+  const yearlyIncome = monthlyData.reduce((sum, data) => sum + data.income, 0);
+
+  // 주간 근무시간 데이터 (이번 달의 주별)
+  const weeklyHours = [];
+  for (let week = 0; week < 4; week++) {
+    const weekStart = 1 + week * 7;
+    const weekEnd = Math.min(weekStart + 6, 31);
+    const weekLogs = currentMonthLogs.filter(log => {
+      const day = parseInt(log.date.split('-')[2]);
+      return day >= weekStart && day <= weekEnd;
+    });
+    const weekHoursTotal = weekLogs.reduce((sum, log) => sum + calculateHours(log.startTime, log.endTime), 0);
+    weeklyHours.push({
+      week: `${week + 1}주`,
+      hours: Math.floor(weekHoursTotal),
+    });
+  }
+
+  const savingsGoal = 10000000;
   const savingsProgress = (yearlyIncome / savingsGoal) * 100;
 
   return (
@@ -34,7 +100,7 @@ export function Dashboard() {
       <div className="bg-gradient-to-r from-blue-600 to-blue-400 rounded-lg p-6 text-white">
         <h2 className="text-2xl font-bold mb-2">안녕하세요! 👋</h2>
         <p className="text-blue-100">
-          {currentMonth} 수입 현황과 근무 통계를 확인하세요.
+          {currentMonth}월 수입 현황과 근무 통계를 확인하세요.
         </p>
       </div>
 
@@ -49,7 +115,7 @@ export function Dashboard() {
         />
         <StatCard
           title="이번 달 근무시간"
-          value={`${totalHours}시간`}
+          value={`${Math.floor(totalHours)}시간`}
           icon={Clock}
           description="총 근무시간"
           color="green"

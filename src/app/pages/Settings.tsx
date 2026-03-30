@@ -1,12 +1,23 @@
 import { useState } from "react";
-import { Target, Save, TrendingUp } from "lucide-react";
+import { Target, Save, TrendingUp, Gift } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { checkSubsidy } from "../utils/api";
+import { toast } from "sonner";
 
 export function Settings() {
   const [savingsGoal, setSavingsGoal] = useState(10000000);
   const [targetDate, setTargetDate] = useState("2026-12-31");
   const [currentSavings, setCurrentSavings] = useState(6120000);
   const [monthlySavings, setMonthlySavings] = useState(500000);
+
+  // 근로장려금 체크
+  const [subsidyForm, setSubsidyForm] = useState({
+    annualIncome: 0,
+    householdType: 'single' as 'single' | 'couple' | 'family',
+    totalAssets: 0,
+  });
+  const [subsidyResult, setSubsidyResult] = useState<any>(null);
+  const [checkingSubsidy, setCheckingSubsidy] = useState(false);
 
   const remainingAmount = savingsGoal - currentSavings;
   const progressPercentage = (currentSavings / savingsGoal) * 100;
@@ -31,8 +42,30 @@ export function Settings() {
   ];
 
   const handleSave = () => {
-    // 실제로는 여기서 데이터 저장
-    alert("설정이 저장되었습니다!");
+    toast.success("설정이 저장되었습니다!");
+  };
+
+  const handleCheckSubsidy = async () => {
+    if (subsidyForm.annualIncome === 0) {
+      toast.error('연간 소득을 입력해주세요.');
+      return;
+    }
+
+    try {
+      setCheckingSubsidy(true);
+      const result = await checkSubsidy(subsidyForm);
+      setSubsidyResult(result);
+      if (result.isEligible) {
+        toast.success('근로장려금 수급 가능합니다!');
+      } else {
+        toast.info('근로장려금 수급 요건을 충족하지 못했습니다.');
+      }
+    } catch (error) {
+      console.error('Failed to check subsidy:', error);
+      toast.error('근로장려금 확인에 실패했습니다.');
+    } finally {
+      setCheckingSubsidy(false);
+    }
   };
 
   return (
@@ -247,6 +280,93 @@ export function Settings() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* 근로장려금 체크 */}
+      <div className="bg-white rounded-lg shadow p-6 border">
+        <h3 className="text-lg font-semibold mb-4">근로장려금 체크</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="border rounded-lg p-4">
+            <h4 className="font-semibold mb-2">연간 소득</h4>
+            <input
+              type="number"
+              value={subsidyForm.annualIncome}
+              onChange={(e) => setSubsidyForm({ ...subsidyForm, annualIncome: Number(e.target.value) })}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              step="100000"
+            />
+          </div>
+          <div className="border rounded-lg p-4">
+            <h4 className="font-semibold mb-2">가구 유형</h4>
+            <select
+              value={subsidyForm.householdType}
+              onChange={(e) => setSubsidyForm({ ...subsidyForm, householdType: e.target.value as 'single' | 'couple' | 'family' })}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="single">단독가구</option>
+              <option value="couple">부부가구</option>
+              <option value="family">가족가구</option>
+            </select>
+          </div>
+          <div className="border rounded-lg p-4">
+            <h4 className="font-semibold mb-2">총 자산</h4>
+            <input
+              type="number"
+              value={subsidyForm.totalAssets}
+              onChange={(e) => setSubsidyForm({ ...subsidyForm, totalAssets: Number(e.target.value) })}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              step="100000"
+            />
+          </div>
+          <div className="border rounded-lg p-4">
+            <button
+              onClick={handleCheckSubsidy}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+            >
+              <Gift className="w-5 h-5" />
+              근로장려금 체크
+            </button>
+          </div>
+        </div>
+        {subsidyResult && (
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            {subsidyResult.isEligible ? (
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-xl">✓</span>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-green-900 mb-1">
+                    {subsidyResult.message}
+                  </h4>
+                  <p className="text-sm text-green-700">
+                    예상 지급액: ₩{subsidyResult.estimatedAmount.toLocaleString()}
+                  </p>
+                  <p className="text-sm text-green-700">
+                    최대 지급액: ₩{subsidyResult.maxSubsidy.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-xl">!</span>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-orange-900 mb-1">
+                    {subsidyResult.message}
+                  </h4>
+                  <p className="text-sm text-orange-700">
+                    소득 요건: {subsidyResult.requirements.incomeRequirement.met ? '✓' : '✗'} 
+                    (한도: ₩{subsidyResult.requirements.incomeRequirement.limit.toLocaleString()})\n                  </p>
+                  <p className="text-sm text-orange-700">
+                    재산 요건: {subsidyResult.requirements.assetRequirement.met ? '✓' : '✗'} 
+                    (한도: ₩{subsidyResult.requirements.assetRequirement.limit.toLocaleString()})\n                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 저축 팁 */}
