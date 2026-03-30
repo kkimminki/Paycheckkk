@@ -1,11 +1,157 @@
+# Pay-Check 💰
 
-  # 제목 없음
+근로자 맞춤형 정산 및 관리 대시보드
 
-  This is a code bundle for 제목 없음. The original project is available at https://www.figma.com/design/BusBaCJrj9To64L1lAbk0h/%EC%A0%9C%EB%AA%A9-%EC%97%86%EC%9D%8C.
+## 🎯 프로젝트 소개
 
-  ## Running the code
+Pay-Check은 대학생과 사회초년생 아르바이트생들을 위한 근무 기록 및 급여 관리 플랫폼입니다. 복잡한 주휴수당, 야간/연장 근로 가산수당, 세금 계산을 자동화하고, 근로장려금 등 놓치기 쉬운 정책 정보를 제공합니다.
 
-  Run `npm i` to install the dependencies.
+## ✨ 주요 기능
 
-  Run `npm run dev` to start the development server.
-  
+### 📊 대시보드
+- 월별/연간 수입 통계 시각화
+- 근무시간 추적 및 분석
+- 저축 목표 달성률 모니터링
+
+### 📅 근무 기록 캘린더
+- 직관적인 캘린더 기반 근무 기록 관리
+- 실시간 데이터 저장 (Supabase 연동)
+- 월별 근무 요약 통계
+
+### 💵 급여 계산기
+- 주휴수당 자동 계산
+- 야간근무 가산수당 (22시~06시, 50%)
+- 연장근로 가산수당 (주 40시간 초과, 50%)
+- 3.3% 사업소득세 자동 계산
+
+### 📋 정책 정보
+- 근로장려금 안내
+- 청년 취업 지원 정책
+- 주거/생활 지원 정책
+
+### 🎯 저축 목표 설정
+- 저축 목표 설정 및 추적
+- 월별 필요 저축액 계산
+- 목표 달성 예측
+- 근로장려금 수급 자격 체크
+
+## 🛠 기술 스택
+
+### Frontend
+- **React 18** - UI 라이브러리
+- **TypeScript** - 타입 안정성
+- **Tailwind CSS v4** - 스타일링
+- **React Router** - 라우팅
+- **Recharts** - 데이터 시각화
+- **Lucide React** - 아이콘
+- **Sonner** - 토스트 알림
+
+### Backend
+- **Supabase** - 백엔드 서비스
+- **Deno** - 서버 런타임
+- **Hono** - 웹 프레임워크
+
+### 개발 도구
+- **Vite** - 빌드 도구
+- **pnpm** - 패키지 관리자
+
+## 🚀 시작하기
+
+### 설치
+
+```bash
+# 의존성 설치
+pnpm install
+
+# 개발 서버 실행
+pnpm dev
+
+# 프로덕션 빌드
+pnpm build
+```
+
+### 환경 변수
+
+프로젝트는 Supabase를 사용하여 데이터를 저장합니다. `/utils/supabase/info.tsx` 파일에서 Supabase 설정을 확인할 수 있습니다.
+
+## 📁 프로젝트 구조
+
+```
+pay-check/
+├── src/
+│   ├── app/
+│   │   ├── components/     # 재사용 가능한 컴포넌트
+│   │   ├── pages/          # 페이지 컴포넌트
+│   │   ├── utils/          # 유틸리티 함수
+│   │   ├── App.tsx         # 메인 앱 컴포넌트
+│   │   └── routes.tsx      # 라우팅 설정
+│   └── styles/             # 글로벌 스타일
+├── supabase/
+│   └── functions/
+│       └── server/         # 백엔드 API
+└── package.json
+```
+
+## 🔌 API 엔드포인트
+
+### 급여 계산
+- `GET /calculate-pay` - 급여 및 주휴수당 계산
+- `GET /calculate-night-pay` - 야간수당 계산
+- `GET /compare-tax` - 3.3% vs 4대보험 비교
+
+### 근무 기록
+- `POST /save-work-log` - 근무 기록 저장
+- `GET /get-work-logs` - 근무 기록 조회
+
+### 정책 지원
+- `GET /check-subsidy` - 근로장려금 수급 자격 확인
+
+## 💡 주요 계산 로직
+
+### 주휴수당
+- 주 15시간 이상 규칙적 근무 시 지급
+- 계산식: (주 평균 근무시간 / 5일) × 시급
+
+### 야간근무 가산수당
+- 22시~06시 근무 시 기본급의 50% 가산
+- 계산식: 기본급 × 1.5
+
+### 연장근로 가산수당
+- 주 40시간 초과 근무 시 기본급의 50% 가산
+- 계산식: 초과시간 × 시급 × 1.5
+
+### 세금 공제
+- 3.3% 사업소득세 원천징수
+- 계산식: 총액 × 0.033
+
+## 🎨 디자인 시스템
+
+- **Primary Color**: Blue (#3B82F6)
+- **Success Color**: Green (#10B981)
+- **Warning Color**: Orange (#F59E0B)
+- **Error Color**: Red (#EF4444)
+
+## 📱 반응형 디자인
+
+모바일, 태블릿, 데스크톱 모든 화면 크기에서 최적화된 경험을 제공합니다.
+
+## 🔮 향후 계획
+
+- [ ] PDF 급여명세서 내보내기
+- [ ] 다크 모드 지원
+- [ ] 알림/리마인더 기능
+- [ ] GPS 기반 출퇴근 인증 시스템
+- [ ] 고용주 확장 서비스
+- [ ] 다국어 지원
+
+## 📄 라이선스
+
+MIT License
+
+## 👥 기여하기
+
+이슈와 풀 리퀘스트는 언제나 환영입니다!
+
+---
+
+**Made with ❤️ for workers**

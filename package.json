@@ -1,11 +1,14 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "pay-check",
+  "description": "근로자 맞춤형 정산 및 관리 대시보드",
+  "version": "1.0.0",
+  "author": "Pay-Check Team",
   "private": true,
-  "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "dev": "vite",
     "build": "vite build",
-    "dev": "vite"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
