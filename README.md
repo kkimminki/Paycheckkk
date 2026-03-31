@@ -94,17 +94,29 @@ pay-check/
 
 ## 🔌 API 엔드포인트
 
-### 급여 계산
+### 급여 계산 (계산기 모드)
 - `GET /calculate-pay` - 급여 및 주휴수당 계산
 - `GET /calculate-night-pay` - 야간수당 계산
 - `GET /compare-tax` - 3.3% vs 4대보험 비교
+- `GET /check-subsidy` - 근로장려금 수급 자격 확인
 
-### 근무 기록
+### 근무 기록 (레거시 KV 스토어)
 - `POST /save-work-log` - 근무 기록 저장
 - `GET /get-work-logs` - 근무 기록 조회
 
-### 정책 지원
-- `GET /check-subsidy` - 근로장려금 수급 자격 확인
+### 데이터베이스 기반 API (실제 DB 조회)
+- `GET /db/monthly-pay` - 월별 급여 계산 (DB)
+  - Query params: `employeeId`, `year`, `month`
+- `GET /db/weekly-holiday-pay` - 주휴수당 계산 (DB)
+  - Query params: `employeeId`, `year`, `month`
+- `GET /db/night-pay` - 야간수당 계산 (DB)
+  - Query params: `employeeId`, `year`, `month`
+- `GET /db/subsidy-check` - 근로장려금 자격 확인 (DB)
+  - Query params: `employeeId`, `year`
+- `POST /db/create-work-log` - 근무 기록 생성 (DB)
+  - Body: `{ employmentId, workDate, startTime, endTime, totalHours, status }`
+- `GET /db/work-logs` - 근무 기록 조회 (DB)
+  - Query params: `employeeId`, `startDate`, `endDate`, `status`
 
 ## 💡 주요 계산 로직
 

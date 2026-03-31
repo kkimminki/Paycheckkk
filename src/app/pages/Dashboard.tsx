@@ -68,6 +68,7 @@ export function Dashboard() {
       ? monthLogs.reduce((sum, log) => sum + log.hourlyWage, 0) / monthLogs.length 
       : avgHourlyWage;
     monthlyData.push({
+      id: `month-${m}`, // 고유 ID 추가
       month: `${m}월`,
       income: Math.floor(monthHours * monthWage),
     });
@@ -86,6 +87,7 @@ export function Dashboard() {
     });
     const weekHoursTotal = weekLogs.reduce((sum, log) => sum + calculateHours(log.startTime, log.endTime), 0);
     weeklyHours.push({
+      id: `week-${week + 1}`, // 고유 ID 추가
       week: `${week + 1}주`,
       hours: Math.floor(weekHoursTotal),
     });

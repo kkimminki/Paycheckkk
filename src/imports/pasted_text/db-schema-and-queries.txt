@@ -1,0 +1,167 @@
+=======================================
+-- 1. 기존 테이블 초기화 (외래키 제약조건 무시)
+-- ==========================================
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS Substitute_Board;
+DROP TABLE IF EXISTS Work_Logs;
+DROP TABLE IF EXISTS Employment;
+DROP TABLE IF EXISTS employment_contracts; 
+DROP TABLE IF EXISTS Workspaces;
+DROP TABLE IF EXISTS Users;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ==========================================
+-- 2. 테이블 생성 (DDL)
+-- ==========================================
+
+-- 사용자 테이블
+CREATE TABLE Users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    role ENUM('EMPLOYER', 'EMPLOYEE') NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 사업장 테이블
+CREATE TABLE Workspaces (
+    workspace_id INT AUTO_INCREMENT PRIMARY KEY,
+    employer_id INT NOT NULL,
+    workspace_name VARCHAR(100) NOT NULL,
+    address VARCHAR(255),
+    FOREIGN KEY (employer_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+
+-- 고용 관계 테이블
+CREATE TABLE Employment (
+    employment_id INT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id INT NOT NULL,
+    employee_id INT NOT NULL,
+    custom_name VARCHAR(100),
+    hourly_wage INT NOT NULL,
+    tax_type VARCHAR(20) DEFAULT '3.3%',
+    FOREIGN KEY (workspace_id) REFERENCES Workspaces(workspace_id) ON DELETE CASCADE,
+    FOREIGN KEY (employee_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+
+-- 근무 기록 테이블
+CREATE TABLE Work_Logs (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    employment_id INT NOT NULL,
+    work_date DATE NOT NULL,
+    start_time TIME,
+    end_time TIME,
+    total_hours DECIMAL(5,2) NOT NULL,
+    status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (employment_id) REFERENCES Employment(employment_id) ON DELETE CASCADE
+);
+
+-- 대타 구하기 게시판 테이블
+CREATE TABLE Substitute_Board (
+    board_id INT AUTO_INCREMENT PRIMARY KEY,
+    requester_id INT NOT NULL,
+    employment_id INT NOT NULL,
+    target_date DATE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT,
+    status ENUM('LOOKING', 'FOUND', 'CANCELED') DEFAULT 'LOOKING',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (requester_id) REFERENCES Users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (employment_id) REFERENCES Employment(employment_id) ON DELETE CASCADE
+);
+
+-- ==========================================
+-- 3. 테스트용 가상 데이터 삽입 (DML)
+-- ==========================================
+
+INSERT INTO Users (username, password, name, role) VALUES
+('employer1', '1234', '김점주', 'EMPLOYER'),
+('employee1', '1234', '박알바', 'EMPLOYEE');
+
+INSERT INTO Workspaces (employer_id, workspace_name, address) VALUES
+(1, '편의점 진주점', '경상남도 진주시');
+
+INSERT INTO Employment (workspace_id, employee_id, custom_name, hourly_wage, tax_type) VALUES
+(1, 2, '월화 편의점 오후알바', 10320, '3.3%');
+
+INSERT INTO Work_Logs (employment_id, work_date, start_time, end_time, total_hours, status) VALUES
+(1, '2026-03-23', '15:00:00', '22:00:00', 7.00, 'APPROVED'),
+(1, '2026-03-24', '15:00:00', '22:00:00', 7.00, 'APPROVED'),
+(1, '2026-03-30', '15:00:00', '22:00:00', 7.00, 'PENDING');
+
+INSERT INTO Substitute_Board (requester_id, employment_id, target_date, title, content, status) VALUES
+(2, 1, '2026-03-31', '3월 31일 화요일 편의점 대타 구합니다', '개인 사정으로 하루 대타 구합니다. 시급 만원 드릴게요.', 'LOOKING');
+
+-- ==========================================
+-- 4. 백엔드 API 연결용 SELECT 쿼리 모음
+-- ==========================================
+-- ※ 주석 [변수처리] 부분은 FastAPI에서 파라미터로 받아서 치환
+
+-- A. 월별 기본급 및 3.3% 세금 계산기 (/calculate-pay)
+SELECT 
+    e.employee_id,
+    DATE_FORMAT(w.work_date, '%Y-%m') AS work_month,
+    SUM(w.total_hours) AS total_monthly_hours,
+    e.hourly_wage,
+    (SUM(w.total_hours) * e.hourly_wage) AS base_pay,
+    ROUND((SUM(w.total_hours) * e.hourly_wage) * 0.033) AS tax_deduction,
+    ROUND((SUM(w.total_hours) * e.hourly_wage) * 0.967) AS final_pay
+FROM Work_Logs w
+JOIN Employment e ON w.employment_id = e.employment_id
+WHERE e.employee_id = 2                                  -- [변수처리] 근로자 ID
+  AND w.status = 'APPROVED'
+  AND w.work_date BETWEEN '2026-03-01' AND '2026-03-31'  -- [변수처리] 조회할 월의 1일~말일
+GROUP BY e.employee_id, work_month, e.hourly_wage;
+
+-- B. 주휴수당 계산기 (주 15시간 이상 조건)
+SELECT 
+    e.employee_id,
+    WEEK(w.work_date, 1) AS week_number,
+    SUM(w.total_hours) AS weekly_hours,
+    CASE 
+        WHEN SUM(w.total_hours) >= 15 THEN ROUND((SUM(w.total_hours) / 40) * 8 * e.hourly_wage)
+        ELSE 0 
+    END AS weekly_holiday_pay
+FROM Work_Logs w
+JOIN Employment e ON w.employment_id = e.employment_id
+WHERE e.employee_id = 2                                  -- [변수처리] 근로자 ID
+  AND w.status = 'APPROVED'
+  AND w.work_date BETWEEN '2026-03-01' AND '2026-03-31'  -- [변수처리] 조회 월
+GROUP BY e.employee_id, week_number, e.hourly_wage;
+
+-- C. 야간수당 계산기 (/calculate-night-pay)
+SELECT 
+    e.employee_id,
+    w.work_date,
+    ROUND(
+        (CASE 
+            WHEN w.end_time > '22:00:00' AND w.start_time < w.end_time THEN TIME_TO_SEC(TIMEDIFF(w.end_time, GREATEST(w.start_time, '22:00:00'))) / 3600.0
+            WHEN w.start_time > w.end_time THEN (TIME_TO_SEC(TIMEDIFF('24:00:00', GREATEST(w.start_time, '22:00:00'))) + TIME_TO_SEC(TIMEDIFF(LEAST(w.end_time, '06:00:00'), '00:00:00'))) / 3600.0
+            ELSE 0 
+        END) * e.hourly_wage * 0.5
+    ) AS extra_night_allowance
+FROM Work_Logs w
+JOIN Employment e ON w.employment_id = e.employment_id
+WHERE e.employee_id = 2                                  -- [변수처리] 근로자 ID
+  AND w.status = 'APPROVED'
+  AND w.work_date BETWEEN '2026-03-01' AND '2026-03-31'; -- [변수처리] 조회 월
+
+-- D. 근로장려금 수급 자격 체크 (/check-subsidy)
+SELECT 
+    e.employee_id,
+    YEAR(w.work_date) AS target_year,
+    SUM(w.total_hours * e.hourly_wage) AS yearly_total_income,
+    CASE 
+        WHEN SUM(w.total_hours * e.hourly_wage) < 22000000 THEN 'ELIGIBLE' 
+        ELSE 'INELIGIBLE' 
+    END AS subsidy_status
+FROM Work_Logs w
+JOIN Employment e ON w.employment_id = e.employment_id
+WHERE e.employee_id = 2           -- [변수처리] 근로자 ID
+  AND w.status = 'APPROVED'
+  AND YEAR(w.work_date) = 2026    -- [변수처리] 조회 연도
+GROUP BY e.employee_id, target_year;

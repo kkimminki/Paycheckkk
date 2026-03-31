@@ -1,9 +1,17 @@
 import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import * as dbQueries from "./db-queries.tsx";
 import * as kv from "./kv_store.tsx";
 
 const app = new Hono();
+
+// Supabase 클라이언트 초기화
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+);
 
 // Enable logger
 app.use('*', logger(console.log));
@@ -218,7 +226,7 @@ app.get("/make-server-b1fa0427/check-subsidy", (c) => {
   }
 });
 
-// POST /save-work-log: 근무 기록 DB 저장
+// POST /save-work-log: 근무 기록 KV 스토어에 저장 (레거시)
 app.post("/make-server-b1fa0427/save-work-log", async (c) => {
   try {
     const body = await c.req.json();
@@ -240,9 +248,10 @@ app.post("/make-server-b1fa0427/save-work-log", async (c) => {
       createdAt: new Date().toISOString(),
     };
 
+    // KV 스토어에 저장
     await kv.set(workLogId, workLog);
 
-    console.log(`Work log saved: ${workLogId}`);
+    console.log(`Work log saved to KV store: ${workLogId}`);
     return c.json({ 
       success: true, 
       message: 'Work log saved successfully',
@@ -254,7 +263,7 @@ app.post("/make-server-b1fa0427/save-work-log", async (c) => {
   }
 });
 
-// GET /get-work-logs: 저장된 근무 기록 전체 불러오기
+// GET /get-work-logs: 저장된 근무 기록 KV 스토어에서 불러오기 (레거시)
 app.get("/make-server-b1fa0427/get-work-logs", async (c) => {
   try {
     const year = c.req.query('year');
@@ -280,8 +289,195 @@ app.get("/make-server-b1fa0427/get-work-logs", async (c) => {
       workLogs: filteredLogs,
     });
   } catch (error) {
-    console.error('Error getting work logs:', error);
+    console.error('Error getting work logs from KV store:', error);
     return c.json({ error: 'Failed to get work logs' }, 500);
+  }
+});
+
+// ===== 데이터베이스 기반 API 엔드포인트 =====
+
+// GET /db/monthly-pay: 데이터베이스에서 월별 급여 조회
+app.get("/make-server-b1fa0427/db/monthly-pay", async (c) => {
+  try {
+    const employeeId = Number(c.req.query('employeeId')) || 2;
+    const year = c.req.query('year') || '2026';
+    const month = c.req.query('month') || '03';
+    
+    const startDate = `${year}-${month}-01`;
+    const endDate = `${year}-${month}-31`;
+
+    const result = await dbQueries.calculateMonthlyPay(supabase, employeeId, startDate, endDate);
+
+    return c.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching monthly pay from database:', error);
+    return c.json({ error: 'Failed to fetch monthly pay' }, 500);
+  }
+});
+
+// GET /db/weekly-holiday-pay: 데이터베이스에서 주휴수당 조회
+app.get("/make-server-b1fa0427/db/weekly-holiday-pay", async (c) => {
+  try {
+    const employeeId = Number(c.req.query('employeeId')) || 2;
+    const year = c.req.query('year') || '2026';
+    const month = c.req.query('month') || '03';
+    
+    const startDate = `${year}-${month}-01`;
+    const endDate = `${year}-${month}-31`;
+
+    const results = await dbQueries.calculateWeeklyHolidayPay(supabase, employeeId, startDate, endDate);
+
+    const totalWeeklyHolidayPay = results.reduce((sum, week) => sum + week.weekly_holiday_pay, 0);
+
+    return c.json({
+      success: true,
+      totalWeeklyHolidayPay,
+      weeklyBreakdown: results,
+    });
+  } catch (error) {
+    console.error('Error fetching weekly holiday pay from database:', error);
+    return c.json({ error: 'Failed to fetch weekly holiday pay' }, 500);
+  }
+});
+
+// GET /db/night-pay: 데이터베이스에서 야간수당 조회
+app.get("/make-server-b1fa0427/db/night-pay", async (c) => {
+  try {
+    const employeeId = Number(c.req.query('employeeId')) || 2;
+    const year = c.req.query('year') || '2026';
+    const month = c.req.query('month') || '03';
+    
+    const startDate = `${year}-${month}-01`;
+    const endDate = `${year}-${month}-31`;
+
+    const results = await dbQueries.calculateNightPay(supabase, employeeId, startDate, endDate);
+
+    const totalNightPay = results.reduce((sum, day) => sum + day.extra_night_allowance, 0);
+
+    return c.json({
+      success: true,
+      totalNightPay,
+      dailyBreakdown: results,
+    });
+  } catch (error) {
+    console.error('Error fetching night pay from database:', error);
+    return c.json({ error: 'Failed to fetch night pay' }, 500);
+  }
+});
+
+// GET /db/subsidy-check: 데이터베이스에서 근로장려금 자격 조회
+app.get("/make-server-b1fa0427/db/subsidy-check", async (c) => {
+  try {
+    const employeeId = Number(c.req.query('employeeId')) || 2;
+    const year = Number(c.req.query('year')) || 2026;
+
+    const result = await dbQueries.checkSubsidy(supabase, employeeId, year);
+
+    return c.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error checking subsidy eligibility from database:', error);
+    return c.json({ error: 'Failed to check subsidy eligibility' }, 500);
+  }
+});
+
+// POST /db/create-work-log: 근무 기록 생성 (스키마 기반)
+app.post("/make-server-b1fa0427/db/create-work-log", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { employmentId, workDate, startTime, endTime, totalHours, status } = body;
+
+    if (!employmentId || !workDate || !totalHours) {
+      return c.json({ error: 'Missing required fields: employmentId, workDate, totalHours' }, 400);
+    }
+
+    const { data, error } = await supabase
+      .from('work_logs')
+      .insert([{
+        employment_id: employmentId,
+        work_date: workDate,
+        start_time: startTime || null,
+        end_time: endTime || null,
+        total_hours: totalHours,
+        status: status || 'PENDING',
+      }])
+      .select();
+
+    if (error) {
+      console.error('Database error creating work log:', error);
+      throw error;
+    }
+
+    console.log(`Work log created for employment_id ${employmentId} on ${workDate}`);
+    return c.json({ 
+      success: true, 
+      message: 'Work log created successfully',
+      data: data[0],
+    });
+  } catch (error) {
+    console.error('Error creating work log:', error);
+    return c.json({ error: 'Failed to create work log' }, 500);
+  }
+});
+
+// GET /db/work-logs: 근무 기록 조회 (스키마 기반)
+app.get("/make-server-b1fa0427/db/work-logs", async (c) => {
+  try {
+    const employeeId = Number(c.req.query('employeeId'));
+    const startDate = c.req.query('startDate');
+    const endDate = c.req.query('endDate');
+    const status = c.req.query('status');
+
+    let query = supabase
+      .from('work_logs')
+      .select(`
+        *,
+        employment!inner(
+          employee_id,
+          hourly_wage,
+          custom_name,
+          workspace:workspaces(workspace_name)
+        )
+      `);
+
+    if (employeeId) {
+      query = query.eq('employment.employee_id', employeeId);
+    }
+
+    if (startDate) {
+      query = query.gte('work_date', startDate);
+    }
+
+    if (endDate) {
+      query = query.lte('work_date', endDate);
+    }
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    query = query.order('work_date', { ascending: false });
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Database error fetching work logs:', error);
+      throw error;
+    }
+
+    return c.json({
+      success: true,
+      count: data?.length || 0,
+      workLogs: data || [],
+    });
+  } catch (error) {
+    console.error('Error fetching work logs:', error);
+    return c.json({ error: 'Failed to fetch work logs' }, 500);
   }
 });
 
