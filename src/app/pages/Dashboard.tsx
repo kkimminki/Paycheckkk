@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { StatCard } from "../components/StatCard";
-import { Wallet, Clock, TrendingUp, Target } from "lucide-react";
+import { Wallet, Clock, TrendingUp, Target, Loader2 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { getWorkLogs } from "../utils/api";
+import { toast } from "sonner";
 
 export function Dashboard() {
   const [workLogs, setWorkLogs] = useState<any[]>([]);
@@ -26,6 +27,7 @@ export function Dashboard() {
       }
     } catch (error) {
       console.error('Failed to load work logs:', error);
+      toast.error('근무 기록을 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }

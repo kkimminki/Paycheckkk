@@ -1,4 +1,7 @@
-import { Gift, AlertCircle, ExternalLink, CheckCircle } from "lucide-react";
+import { useState } from "react";
+import { Gift, AlertCircle, ExternalLink, CheckCircle, Calculator } from "lucide-react";
+import { checkSubsidy } from "../utils/api";
+import { toast } from "sonner";
 
 interface PolicyInfo {
   id: string;
@@ -32,7 +35,7 @@ const policies: PolicyInfo[] = [
   {
     id: "2",
     title: "청년 일자리 도약 장려금",
-    category: "고용노동부",
+    category: "고용노���부",
     description:
       "중소·중견기업에 취업한 청년에게 장려금을 지급하여 중소기업 취업을 촉진하고 청년의 자산형성을 지원하는 제도입니다.",
     eligibility: [
@@ -112,6 +115,29 @@ const policies: PolicyInfo[] = [
 ];
 
 export function Policy() {
+  const [showSubsidyChecker, setShowSubsidyChecker] = useState(false);
+  const [subsidyForm, setSubsidyForm] = useState({
+    annualIncome: 0,
+    householdType: 'single' as 'single' | 'couple' | 'family',
+    totalAssets: 0,
+  });
+  const [subsidyResult, setSubsidyResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleCheckSubsidy = async () => {
+    try {
+      setLoading(true);
+      const result = await checkSubsidy(subsidyForm);
+      setSubsidyResult(result);
+      toast.success('근로장려금 자격 확인이 완료되었습니다!');
+    } catch (error) {
+      console.error('Failed to check subsidy:', error);
+      toast.error('근로장려금 자격 확인에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusBadge = (status: PolicyInfo["status"]) => {
     const badges = {
       available: (

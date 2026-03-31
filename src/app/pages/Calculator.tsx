@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Calculator as CalcIcon, Info } from "lucide-react";
-import { calculatePay, calculateWorkHours } from "../utils/payCalculator";
+import { Calculator as CalcIcon, Info, Loader2 } from "lucide-react";
+import { calculatePay as calculatePayAPI } from "../utils/api";
+import { calculateWorkHours } from "../utils/payCalculator";
+import { toast } from "sonner";
 
 export function Calculator() {
   const [formData, setFormData] = useState({
@@ -13,21 +15,31 @@ export function Calculator() {
     weeklyHours: 40,
   });
 
-  const [result, setResult] = useState<ReturnType<typeof calculatePay> | null>(
-    null
-  );
+  const [result, setResult] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleCalculate = () => {
-    const hours = calculateWorkHours(formData.startTime, formData.endTime);
-    const calculation = calculatePay(
-      hours,
-      formData.hourlyWage,
-      formData.isNightShift,
-      formData.isOvertime,
-      formData.includeWeeklyHolidayPay,
-      formData.weeklyHours
-    );
-    setResult(calculation);
+  const handleCalculate = async () => {
+    try {
+      setLoading(true);
+      const hours = calculateWorkHours(formData.startTime, formData.endTime);
+      
+      const response = await calculatePayAPI({
+        hours,
+        hourlyWage: formData.hourlyWage,
+        isNightShift: formData.isNightShift,
+        isOvertime: formData.isOvertime,
+        includeWeeklyHolidayPay: formData.includeWeeklyHolidayPay,
+        weeklyHours: formData.weeklyHours,
+      });
+
+      setResult(response);
+      toast.success('급여 계산이 완료되었습니다!');
+    } catch (error) {
+      console.error('Failed to calculate pay:', error);
+      toast.error('급여 계산에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const workHours = calculateWorkHours(formData.startTime, formData.endTime);
@@ -192,9 +204,11 @@ export function Calculator() {
 
             <button
               onClick={handleCalculate}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+              disabled={loading}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              급여 계산하기
+              {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+              {loading ? '계산 중...' : '급여 계산하기'}
             </button>
           </div>
         </div>
