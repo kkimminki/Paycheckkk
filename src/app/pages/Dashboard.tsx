@@ -141,48 +141,63 @@ export function Dashboard() {
       {/* 월별 수입 차트 */}
       <div className="bg-white rounded-lg shadow p-6 border">
         <h3 className="text-lg font-semibold mb-4">월별 수입 추이</h3>
-        <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={monthlyData}>
-            <defs>
-              <linearGradient id="colorIncomeGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-            <XAxis dataKey="month" stroke="#6B7280" />
-            <YAxis stroke="#6B7280" />
-            <Tooltip 
-              formatter={(value: number) => `₩${value.toLocaleString()}`}
-              contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
-            />
-            <Area 
-              type="monotone" 
-              dataKey="income" 
-              stroke="#3B82F6" 
-              strokeWidth={2}
-              fillOpacity={1} 
-              fill="url(#colorIncomeGradient)" 
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        {monthlyData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={250}>
+            <AreaChart data={monthlyData} key="monthly-income-chart">
+              <defs>
+                <linearGradient id="colorIncomeGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid key="grid-monthly" strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis key="xaxis-monthly" dataKey="month" stroke="#6B7280" />
+              <YAxis key="yaxis-monthly" stroke="#6B7280" />
+              <Tooltip 
+                key="tooltip-monthly"
+                formatter={(value: number) => `₩${value.toLocaleString()}`}
+                contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+              />
+              <Area 
+                key="area-monthly"
+                type="monotone" 
+                dataKey="income" 
+                stroke="#3B82F6" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorIncomeGradient)" 
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[250px] flex items-center justify-center text-gray-400">
+            데이터가 없습니다
+          </div>
+        )}
       </div>
 
       {/* 주간 근무시간 차트 */}
       <div className="bg-white rounded-lg shadow p-6 border">
         <h3 className="text-lg font-semibold mb-4">이번 달 주간 근무시간</h3>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={weeklyHours}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-            <XAxis dataKey="week" stroke="#6B7280" />
-            <YAxis stroke="#6B7280" />
-            <Tooltip 
-              formatter={(value: number) => `${value}시간`}
-              contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
-            />
-            <Bar dataKey="hours" fill="#10B981" radius={[8, 8, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {weeklyHours.length > 0 ? (
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={weeklyHours} key="weekly-hours-chart">
+              <CartesianGrid key="grid-weekly" strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis key="xaxis-weekly" dataKey="week" stroke="#6B7280" />
+              <YAxis key="yaxis-weekly" stroke="#6B7280" />
+              <Tooltip 
+                key="tooltip-weekly"
+                formatter={(value: number) => `${value}시간`}
+                contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB' }}
+              />
+              <Bar key="bar-weekly" dataKey="hours" fill="#10B981" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[200px] flex items-center justify-center text-gray-400">
+            데이터가 없습니다
+          </div>
+        )}
       </div>
 
       {/* 빠른 액션 */}
